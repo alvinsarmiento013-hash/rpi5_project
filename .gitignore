@@ -1,4 +1,2 @@
-echo "__pycache__/" > .gitignore
-echo "*.pyc" >> .gitignore
-git add .gitignore
-git commit -m "add gitignore"
+__pycache__/
+*.pyc
