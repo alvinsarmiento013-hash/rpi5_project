@@ -1,18 +1,6 @@
 """
-Swing arm simulation: 4 servos rest at 180, swing fast to 90, return to 180 and hold.
+Swing arm simulation: 4 servos rest at 180, swing to 90 at adjustable speed, return to 180 and hold.
 Triggered together by a single button press.
-
-Wiring:
-  Servo 1 signal -> GPIO18 (PWM)
-  Servo 2 signal -> GPIO13 (PWM)
-  Servo 3 signal -> GPIO12 (PWM)
-  Servo 4 signal -> GPIO19 (PWM)
-  All servo power (red) -> separate 5V/6V supply, NOT the Pi's 5V rail
-  All servo grounds -> common ground with the Pi
-
-  Button leg 1 -> GPIO15 (BCM)
-  Button leg 2 -> any GND pin on the Pi
-  (uses internal pull-up: pin reads HIGH normally, LOW when pressed)
 """
 
 import time
@@ -20,12 +8,15 @@ from gpiozero import AngularServo, Button
 from gpiozero.pins.lgpio import LGPIOFactory
 
 # ---- CONFIG ----
-SERVO_PINS = [18, 13, 12, 19]   # change to whichever GPIOs you wired each servo to
+SERVO_PINS = [18, 13, 12, 19]
 BUTTON_PIN = 15
 REST_ANGLE = 180
 SWING_ANGLE = 90
-HOLD_AT_SWING = 0.2      # seconds to pause at 90 before returning
-REST_SETTLE = 0.5        # seconds to settle at rest before accepting next press
+HOLD_AT_SWING = 1.5
+REST_SETTLE = 1.0
+
+SPEED = 100          # 1-100. 100 = fastest (direct jump), lower = slower stepped movement
+STEP_SIZE = 2         # degrees per step when speed < 100 (smaller = smoother but more steps)
 
 factory = LGPIOFactory()
 
@@ -41,26 +32,48 @@ servos = [
     for pin in SERVO_PINS
 ]
 
-button = Button(BUTTON_PIN, pin_factory=factory)  # pull_up=True by default
+button = Button(BUTTON_PIN, pin_factory=factory)
 
-def set_all(angle):
-    for s in servos:
-        s.angle = angle
+def move_all(target_angle, speed=SPEED):
+    """Move all servos to target_angle. speed=100 jumps directly (max mechanical speed).
+    Lower speed steps through intermediate angles with a delay, simulating slower motion."""
+    if speed >= 100:
+        for s in servos:
+            s.angle = target_angle
+        return
+
+    # delay per step scales inversely with speed: lower speed = longer delay
+    # at speed=1, delay is largest; at speed=99, delay is tiny (near-instant)
+    delay_per_step = (100 - speed) / 100 * 0.05   # tune 0.05 to taste
+
+    # step each servo from its current angle toward target
+    current_angles = [s.angle if s.angle is not None else REST_ANGLE for s in servos]
+    steps_needed = max(
+        abs(target_angle - cur) for cur in current_angles
+    ) / STEP_SIZE
+    steps_needed = max(1, int(steps_needed))
+
+    for step in range(1, steps_needed + 1):
+        for i, s in enumerate(servos):
+            start = current_angles[i]
+            new_angle = start + (target_angle - start) * (step / steps_needed)
+            s.angle = new_angle
+        time.sleep(delay_per_step)
 
 def swing_cycle():
-    set_all(SWING_ANGLE)               # all servos move to 90 together
-    time.sleep(HOLD_AT_SWING)          # brief pause at 90
-    set_all(REST_ANGLE)                # all servos return to 180 together
-    time.sleep(REST_SETTLE)            # settle time before accepting next press
+    move_all(SWING_ANGLE, SPEED)
+    time.sleep(HOLD_AT_SWING)
+    move_all(REST_ANGLE, SPEED)
+    time.sleep(REST_SETTLE)
 
 def main():
-    print(f"Resting all servos at {REST_ANGLE} degrees. Waiting for button presses...")
-    set_all(REST_ANGLE)
+    print(f"Resting all servos at {REST_ANGLE} degrees. Speed set to {SPEED}%. Waiting for button presses...")
+    move_all(REST_ANGLE, speed=100)   # snap to rest instantly on startup
     time.sleep(1)
 
     while True:
         button.wait_for_press()
-        print("Button pressed — swinging all servos.")
+        print(f"Button pressed — swinging all servos at speed {SPEED}%.")
         swing_cycle()
         print(f"Back at rest ({REST_ANGLE}). Waiting for next press...")
 
