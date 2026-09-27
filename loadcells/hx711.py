@@ -1,20 +1,8 @@
 """
-HX711 + Load Cell — Live Terminal Test (no file output)
+HX711 + Load Cell — Live Weight in KG (no file output)
 
-Prints raw readings continuously to the terminal so you can watch values
-change in real time as you press/release the load cell. Press Ctrl+C to stop.
-
-Wiring:
-  HX711 VCC -> Pi 5V (or 3.3V, check your specific HX711 board's rating)
-  HX711 GND -> Pi GND
-  HX711 DT  -> Pi GPIO5 (change DT_PIN below if wired elsewhere)
-  HX711 SCK -> Pi GPIO6 (change SCK_PIN below if wired elsewhere)
-  Load cell's 4 wires (red/black/white/green typically) -> HX711's
-  E+/E-/A+/A- terminals per the load cell's own color-coding/datasheet
-
-This talks to the HX711 directly over its native 2-wire protocol using
-lgpio (same library already used for the servos), so no extra HX711
-library is required.
+Calibrates on startup (tare + one known weight), then shows live kg
+readings continuously. Press Ctrl+C to stop.
 """
 
 import lgpio
@@ -29,7 +17,6 @@ lgpio.gpio_claim_input(h, DT_PIN)
 
 
 def read_raw():
-    # wait until the HX711 signals data is ready (DT goes low)
     while lgpio.gpio_read(h, DT_PIN) == 1:
         time.sleep(0.001)
 
@@ -41,23 +28,43 @@ def read_raw():
         if lgpio.gpio_read(h, DT_PIN):
             count += 1
 
-    # 25th pulse: sets gain=128, channel A for the NEXT reading
+    # 25th pulse: gain=128, channel A for next reading
     lgpio.gpio_write(h, SCK_PIN, 1)
     lgpio.gpio_write(h, SCK_PIN, 0)
 
-    # convert 24-bit two's complement to a signed integer
     if count & 0x800000:
         count -= 0x1000000
 
     return count
 
 
+def average_reading(samples=15):
+    vals = [read_raw() for _ in range(samples)]
+    return sum(vals) / len(vals)
+
+
+def calibrate():
+    input("Remove all weight from the load cell, then press Enter...")
+    offset = average_reading()
+    print(f"Zero offset (tare): {offset:.0f}")
+
+    known_weight = float(input("Enter the known weight you'll place on it, in kg: "))
+    input("Place that weight on the load cell now, then press Enter...")
+    raw_with_weight = average_reading()
+
+    scale_factor = (raw_with_weight - offset) / known_weight
+    print(f"Scale factor: {scale_factor:.2f} counts/kg\n")
+    return offset, scale_factor
+
+
 def main():
-    print("Reading load cell — live values below. Press Ctrl+C to stop.\n")
+    offset, scale_factor = calibrate()
+    print("Calibration done. Showing live weight — press Ctrl+C to stop.\n")
     try:
         while True:
-            val = read_raw()
-            print(f"Raw: {val}")
+            raw = read_raw()
+            kg = (raw - offset) / scale_factor
+            print(f"Weight: {kg:.3f} kg")
             time.sleep(0.2)
     except KeyboardInterrupt:
         print("\nStopped.")
