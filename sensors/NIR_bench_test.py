@@ -29,7 +29,7 @@ LOG_DURATION_S = 10
 GAIN = 3                  # 0=1x, 1=3.7x, 2=16x, 3=64x  (lower it if values saturate under halogen)
 INT_TIME = 50             # integration time = INT_TIME x 2.8 ms (50 = 140 ms)
 
-LOG_FOLDER = "NIR_Test_Logs_with_enclosure"
+LOG_FOLDER = "NIR_Test_Logs_with_enclosure_proper_labels"
 CHANNELS = ["R_610", "S_680", "T_730", "U_760", "V_810", "W_860"]
 CAL_REGS = [0x14, 0x18, 0x1C, 0x20, 0x24, 0x28]   # calibrated float registers
 
