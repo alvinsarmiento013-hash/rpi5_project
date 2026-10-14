@@ -12,9 +12,9 @@ from gpiozero import PWMOutputDevice, DigitalOutputDevice
 RPWM_PIN = 18
 R_EN_PIN = 23
 PWM_FREQ = 1000        # Hz
-RUN_SPEED = 0.5        # 0.0-1.0 (start low, e.g. 0.3)
-RUN_SECONDS = 5
-RAMP_SECONDS = 2
+RUN_SPEED = 1.0        # 0.0-1.0 (start low, e.g. 0.3)
+RUN_SECONDS = 10
+RAMP_SECONDS = 0.5
 
 rpwm = PWMOutputDevice(RPWM_PIN, frequency=PWM_FREQ, initial_value=0)
 r_en = DigitalOutputDevice(R_EN_PIN, initial_value=False)
